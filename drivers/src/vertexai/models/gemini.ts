@@ -151,7 +151,11 @@ export class GeminiModelDefinition implements ModelDefinition<GenerateContentReq
     async requestCompletion(driver: VertexAIDriver, prompt: GenerateContentRequest, options: ExecutionOptions): Promise<Completion> {
         const splits = options.model.split("/");
         const modelName = splits[splits.length - 1];
-        options = { ...options, model: modelName};
+        options = { ...options, model: modelName };
+        
+        if (modelName.includes("exp")) {
+            throw new Error("Experimental model not supported");
+        }
         
         const model = getGenerativeModel(driver, options);
         const r = await model.generateContent(prompt);
@@ -192,7 +196,11 @@ export class GeminiModelDefinition implements ModelDefinition<GenerateContentReq
     async requestCompletionStream(driver: VertexAIDriver, prompt: GenerateContentRequest, options: ExecutionOptions): Promise<AsyncIterable<CompletionChunkObject>> {
         const splits = options.model.split("/");
         const modelName = splits[splits.length - 1];
-        options = { ...options, model: modelName};
+        options = { ...options, model: modelName };
+        
+        if (modelName.includes("exp")) {
+            throw new Error("Experimental model not supported");
+        }
         
         const model = getGenerativeModel(driver, options);
         const streamingResp = await model.generateContentStream(prompt);

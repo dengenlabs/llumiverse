@@ -133,6 +133,9 @@ importers:
       openai:
         specifier: ^4.61.1
         version: 4.77.0
+      openapi-types:
+        specifier: ^12.1.3
+        version: 12.1.3
       replicate:
         specifier: ^0.33.0
         version: 0.33.0

@@ -3,10 +3,24 @@ import { AIModel, Completion, CompletionChunkObject, ExecutionOptions, Execution
 import { asyncMap } from "@llumiverse/core/async";
 import { VertexAIDriver } from "../index.js";
 import { ModelDefinition } from "../models.js";
+import { JSONSchema4 } from "json-schema";
+import { OpenAPIV3 } from "openapi-types";
 
-const convertSchema = require('@openapi-contrib/json-schema-to-openapi-schema');
-//import convert from '@openapi-contrib/json-schema-to-openapi-schema';
-//import * as abc from '@openapi-contrib/json-schema-to-openapi-schema';
+import jsonSchemaoOpenApiModule from '@openapi-contrib/json-schema-to-openapi-schema';
+const convertSchema = jsonSchemaoOpenApiModule as unknown as <T extends object = JSONSchema4>(schema: T, options?: any) => Promise<OpenAPIV3.Document<T>>;;
+
+function openAPItoResponseSchema(schema: OpenAPIV3.BaseSchemaObject| undefined) : ResponseSchema | undefined {
+    if (!schema) { return undefined; }
+    const response_schema: ResponseSchema = {
+        format: schema.format,
+        description: schema.description,
+        nullable: schema.nullable,
+        enum: schema.enum,
+        properties: schema.properties as any,
+        //...schema as any,
+    }
+    return response_schema;
+}
 
 async function getGenerativeModel(driver: VertexAIDriver, options: ExecutionOptions, modelParams?: ModelParams) {
 
@@ -15,7 +29,12 @@ async function getGenerativeModel(driver: VertexAIDriver, options: ExecutionOpti
 
     //Response schema is a subset of OpenAPIv3.0, convert to OpenAPIv3.0 and then type assertion to ResponseSchema.
     //Fields not in the in subset are ignored.
-    const openAPISchema = jsonMode ? await convertSchema(options.result_schema ?? {}) as ResponseSchema : undefined;
+    const openAPISchema = jsonMode ? await convertSchema(options.result_schema ?? {}) : undefined;
+    const responseSchema = openAPItoResponseSchema(openAPISchema);
+
+    console.log("JSONSchema", options.result_schema);
+    console.log("OpenAPISchema", openAPISchema);
+    console.log("ResponseSchema", responseSchema);
 
     const model = driver.vertexai.getGenerativeModel({
         model: options.model,
@@ -42,7 +61,7 @@ async function getGenerativeModel(driver: VertexAIDriver, options: ExecutionOpti
     ], 
         generationConfig: {
             responseMimeType: jsonMode ? "application/json" : "text/plain",
-            responseSchema: openAPISchema,
+            responseSchema: responseSchema,
             candidateCount: modelParams?.generationConfig?.candidateCount ?? 1,
             temperature: options.temperature,
             maxOutputTokens: options.max_tokens,
@@ -136,8 +155,10 @@ export class GeminiModelDefinition implements ModelDefinition<GenerateContentReq
             }
         }
 
+        const jsonModeinConfig = options.result_schema && (options.model.includes("1.5") || options.model.includes("2.0"));
+
         let tools: any = undefined;
-        if (schema) {
+        if (schema && !jsonModeinConfig) {
             safety.push("The answer must be a JSON object using the following JSON Schema:\n" + JSON.stringify(schema));
         }
 

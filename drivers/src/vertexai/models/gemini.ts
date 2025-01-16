@@ -1,13 +1,21 @@
-import { Content, FinishReason, GenerateContentRequest, HarmBlockThreshold, HarmCategory, InlineDataPart, ModelParams, TextPart } from "@google-cloud/vertexai";
+import { Content, FinishReason, GenerateContentRequest, HarmBlockThreshold, HarmCategory, InlineDataPart, ModelParams, ResponseSchema, TextPart } from "@google-cloud/vertexai";
 import { AIModel, Completion, CompletionChunkObject, ExecutionOptions, ExecutionTokenUsage, ModelType, PromptOptions, PromptRole, PromptSegment, readStreamAsBase64 } from "@llumiverse/core";
 import { asyncMap } from "@llumiverse/core/async";
 import { VertexAIDriver } from "../index.js";
 import { ModelDefinition } from "../models.js";
 
-function getGenerativeModel(driver: VertexAIDriver, options: ExecutionOptions, modelParams?: ModelParams) {
+const convertSchema = require('@openapi-contrib/json-schema-to-openapi-schema');
+//import convert from '@openapi-contrib/json-schema-to-openapi-schema';
+//import * as abc from '@openapi-contrib/json-schema-to-openapi-schema';
+
+async function getGenerativeModel(driver: VertexAIDriver, options: ExecutionOptions, modelParams?: ModelParams) {
 
     //1.0 Ultra does not support JSON output, 1.0 Pro does.
     const jsonMode = options.result_schema && !(options.model.includes("ultra"));
+
+    //Response schema is a subset of OpenAPIv3.0, convert to OpenAPIv3.0 and then type assertion to ResponseSchema.
+    //Fields not in the in subset are ignored.
+    const openAPISchema = jsonMode ? await convertSchema(options.result_schema ?? {}) as ResponseSchema : undefined;
 
     const model = driver.vertexai.getGenerativeModel({
         model: options.model,
@@ -34,6 +42,7 @@ function getGenerativeModel(driver: VertexAIDriver, options: ExecutionOptions, m
     ], 
         generationConfig: {
             responseMimeType: jsonMode ? "application/json" : "text/plain",
+            responseSchema: openAPISchema,
             candidateCount: modelParams?.generationConfig?.candidateCount ?? 1,
             temperature: options.temperature,
             maxOutputTokens: options.max_tokens,
@@ -153,7 +162,7 @@ export class GeminiModelDefinition implements ModelDefinition<GenerateContentReq
         const modelName = splits[splits.length - 1];
         options = { ...options, model: modelName};
         
-        const model = getGenerativeModel(driver, options);
+        const model = await getGenerativeModel(driver, options);
         const r = await model.generateContent(prompt);
         const response = await r.response;
         const usage = response.usageMetadata;
@@ -194,7 +203,7 @@ export class GeminiModelDefinition implements ModelDefinition<GenerateContentReq
         const modelName = splits[splits.length - 1];
         options = { ...options, model: modelName};
         
-        const model = getGenerativeModel(driver, options);
+        const model = await getGenerativeModel(driver, options);
         const streamingResp = await model.generateContentStream(prompt);
 
         const stream = asyncMap(streamingResp.stream, async (item) => {
